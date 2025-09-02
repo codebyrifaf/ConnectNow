@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { authService, AuthUser } from '../services/auth';
-import { databaseService } from '../services/database';
+import { AuthUser, firebaseAuthService } from '../services/firebase-auth';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -31,65 +30,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    checkAuthStatus();
+    // Set up Firebase auth state listener
+    const unsubscribe = firebaseAuthService.onAuthStateChanged((user) => {
+      setUser(user);
+      setIsLoading(false);
+    });
+
+    return unsubscribe;
   }, []);
 
-  const checkAuthStatus = async () => {
-    try {
-      // DEVELOPMENT: Clear auth on app start (remove in production)
-      if (__DEV__) {
-        await authService.signOut();
-        console.log('Development mode: Auth cleared on startup');
-      }
-      
-      const isAuth = await authService.isAuthenticated();
-      if (isAuth) {
-        const currentUser = await authService.getCurrentUser();
-        if (currentUser) {
-          // Initialize database when user is authenticated
-          await databaseService.initDatabase();
-          setUser(currentUser);
-        }
-      }
-    } catch (error) {
-      console.error('Error checking auth status:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const signIn = async (usernameOrEmail: string, password: string) => {
-    const result = await authService.signIn(usernameOrEmail, password);
-    if (result.success && result.user) {
-      try {
-        // Initialize database after successful sign in
-        await databaseService.initDatabase();
-        setUser(result.user);
-      } catch (error) {
-        console.error('Error initializing database after sign in:', error);
-        return { success: false, message: 'Failed to initialize the app' };
-      }
-    }
+    const result = await firebaseAuthService.signIn(usernameOrEmail, password);
     return result;
   };
 
   const signUp = async (username: string, email: string, password: string, displayName: string) => {
-    const result = await authService.signUp(username, email, password, displayName);
-    if (result.success && result.user) {
-      try {
-        // Initialize database after successful sign up
-        await databaseService.initDatabase();
-        setUser(result.user);
-      } catch (error) {
-        console.error('Error initializing database after sign up:', error);
-        return { success: false, message: 'Failed to initialize the app' };
-      }
-    }
+    const result = await firebaseAuthService.signUp(username, email, password, displayName);
     return result;
   };
 
   const signOut = async () => {
-    await authService.signOut();
+    await firebaseAuthService.signOut();
     setUser(null);
   };
 
@@ -98,10 +59,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return { success: false, message: 'User not authenticated' };
     }
 
-    const result = await authService.updateProfile(user.id, updates);
+    const result = await firebaseAuthService.updateProfile(user.id, updates);
     if (result.success) {
       // Refresh user data
-      const updatedUser = await authService.getCurrentUser();
+      const updatedUser = await firebaseAuthService.getCurrentUser();
       if (updatedUser) {
         setUser(updatedUser);
       }

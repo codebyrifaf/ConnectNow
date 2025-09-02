@@ -8,12 +8,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
-import { databaseService } from '@/services/database';
-import { createSampleData, hasSampleData } from '@/utils/sampleData';
 
 export default function ExploreScreen() {
   const [stats, setStats] = useState({
@@ -22,8 +21,8 @@ export default function ExploreScreen() {
   });
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');
-  const [hasData, setHasData] = useState(false);
   const { user, signOut, updateProfile } = useAuth();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     loadUserAndStats();
@@ -35,22 +34,13 @@ export default function ExploreScreen() {
         setNewName(user.displayName);
       }
 
-      // Load stats
-      const chats = await databaseService.getChats();
-      let totalMessages = 0;
-      
-      for (const chat of chats) {
-        const messages = await databaseService.getMessages(chat.id);
-        totalMessages += messages.length;
-      }
-
+      // Load stats from Firebase
+      // Note: For stats, we'll need to implement simpler approach since Firebase uses real-time listeners
+      // For now, we'll show basic user info and let stats be updated when user navigates
       setStats({
-        totalChats: chats.length,
-        totalMessages,
+        totalChats: 0,
+        totalMessages: 0,
       });
-
-      const dataExists = await hasSampleData();
-      setHasData(dataExists);
     } catch (error) {
       console.error('Error loading user and stats:', error);
     }
@@ -70,49 +60,6 @@ export default function ExploreScreen() {
     } catch (error) {
       console.error('Error updating name:', error);
       Alert.alert('Error', 'Failed to update name');
-    }
-  };
-
-  const handleClearAllData = () => {
-    Alert.alert(
-      'Clear All Data',
-      'This will delete all chats and messages. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear All',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const success = await databaseService.clearAllData();
-              if (success) {
-                Alert.alert('Success', 'All data cleared successfully');
-                await loadUserAndStats();
-              } else {
-                Alert.alert('Error', 'Failed to clear data');
-              }
-            } catch (error) {
-              console.error('Error clearing data:', error);
-              Alert.alert('Error', 'Failed to clear data');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleCreateSampleData = async () => {
-    try {
-      const success = await createSampleData();
-      if (success) {
-        Alert.alert('Success', 'Sample data created successfully!');
-        await loadUserAndStats();
-      } else {
-        Alert.alert('Error', 'Failed to create sample data');
-      }
-    } catch (error) {
-      console.error('Error creating sample data:', error);
-      Alert.alert('Error', 'Failed to create sample data');
     }
   };
 
@@ -142,7 +89,7 @@ export default function ExploreScreen() {
   );
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container]}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.title}>Profile & Settings</ThemedText>
 
@@ -252,18 +199,6 @@ export default function ExploreScreen() {
             </ThemedText>
           </TouchableOpacity>
 
-          {!hasData && (
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={handleCreateSampleData}
-            >
-              <Ionicons name="add-circle" size={20} color="#34C759" />
-              <ThemedText style={[styles.actionText, { color: '#34C759' }]}>
-                Create Sample Data
-              </ThemedText>
-            </TouchableOpacity>
-          )}
-
           <TouchableOpacity 
             style={styles.actionButton}
             onPress={handleSignOut}
@@ -279,9 +214,9 @@ export default function ExploreScreen() {
         <View style={styles.section}>
           <ThemedText type="subtitle" style={styles.sectionTitle}>About</ThemedText>
           <ThemedText style={styles.aboutText}>
-            Chat App v1.0.0{'\n'}
+            ConnectNow v1.0.0{'\n'}
             Built with React Native & Expo{'\n'}
-            SQLite local storage{'\n'}
+            Firebase Firestore & Authentication{'\n'}
             Real-time chat functionality
           </ThemedText>
         </View>

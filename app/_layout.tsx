@@ -26,7 +26,7 @@ const ProfessionalLightTheme = {
 };
 
 const ProfessionalDarkTheme = {
-  ...DefaultTheme, // Use light theme base for consistent look
+  ...DefaultTheme, 
   colors: {
     ...DefaultTheme.colors,
     primary: Colors.light.primary,
@@ -37,7 +37,7 @@ const ProfessionalDarkTheme = {
   },
 };
 
-// Inline AuthWrapper component
+// this controls navigation flow
 function InlineAuthWrapper({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const segments = useSegments();

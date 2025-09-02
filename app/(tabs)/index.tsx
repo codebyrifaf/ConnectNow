@@ -1,24 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Alert,
-  FlatList,
-  Modal,
-  SafeAreaView,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    FlatList,
+    Modal,
+    SafeAreaView,
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ChatList } from '@/components/chat/ChatList';
 import { useAuth } from '@/contexts/AuthContext';
-import { authService, AuthUser } from '@/services/auth';
-import { Chat, databaseService } from '@/services/database';
-import { generateId } from '@/utils/helpers';
+import { AuthUser, firebaseAuthService } from '@/services/firebase-auth';
+import { Chat, firestoreService, Unsubscribe } from '@/services/firestore';
 
 export default function HomeScreen() {
   const [chats, setChats] = useState<Chat[]>([]);
@@ -29,30 +28,25 @@ export default function HomeScreen() {
   const [searchLoading, setSearchLoading] = useState(false);
   const router = useRouter();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
+    let unsubscribe: Unsubscribe | null = null;
+    
     if (user) {
-      loadChats();
-      setLoading(false);
+      // Subscribe to user's chats
+      unsubscribe = firestoreService.getUserChats(user.id, (chats) => {
+        setChats(chats);
+        setLoading(false);
+      });
     }
-  }, [user]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (user) {
-        loadChats();
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
       }
-    }, [user])
-  );
-
-  const loadChats = async () => {
-    try {
-      const chatList = await databaseService.getChats();
-      setChats(chatList);
-    } catch (error) {
-      console.error('Error loading chats:', error);
-    }
-  };
+    };
+  }, [user]);
 
   const handleCreateNewChat = () => {
     setShowFindUsersModal(true);
@@ -61,24 +55,41 @@ export default function HomeScreen() {
   };
 
   const handleCreateChat = async (selectedUser: AuthUser) => {
+    if (!user) return;
+    
     try {
-      const chatName = `${user?.displayName} & ${selectedUser.displayName}`;
-      const newChat: Chat = {
-        id: generateId(),
-        name: chatName,
-        lastMessage: '',
-        lastMessageTime: Date.now(),
-      };
+      // Check if chat already exists
+      const existingChat = await firestoreService.checkChatExists(user.id, selectedUser.id);
       
-      const success = await databaseService.createChat(newChat);
-      if (success) {
-        await loadChats();
+      if (existingChat) {
+        // Navigate to existing chat
         setShowFindUsersModal(false);
         setSearchQuery('');
         setFoundUsers([]);
         router.push({
           pathname: '/chat/[id]' as any,
-          params: { id: newChat.id, name: newChat.name },
+          params: { id: existingChat.id, name: existingChat.name },
+        });
+        return;
+      }
+
+      const chatName = `${user.displayName} & ${selectedUser.displayName}`;
+      const newChatData = {
+        name: chatName,
+        participants: [user.id, selectedUser.id],
+        lastMessage: '',
+        lastMessageTime: new Date(),
+        createdBy: user.id,
+      };
+      
+      const chatId = await firestoreService.createChat(newChatData);
+      if (chatId) {
+        setShowFindUsersModal(false);
+        setSearchQuery('');
+        setFoundUsers([]);
+        router.push({
+          pathname: '/chat/[id]' as any,
+          params: { id: chatId, name: chatName },
         });
       } else {
         Alert.alert('Error', 'Failed to create chat');
@@ -95,18 +106,6 @@ export default function HomeScreen() {
     setFoundUsers([]);
   };
 
-  const handleFindUsers = () => {
-    setShowFindUsersModal(true);
-    setFoundUsers([]);
-    setSearchQuery('');
-  };
-
-  const handleCancelFindUsers = () => {
-    setShowFindUsersModal(false);
-    setSearchQuery('');
-    setFoundUsers([]);
-  };
-
   const searchUsers = async (query: string) => {
     if (!query.trim()) {
       setFoundUsers([]);
@@ -115,7 +114,7 @@ export default function HomeScreen() {
 
     setSearchLoading(true);
     try {
-      const users = await authService.searchUsers(query.trim(), user?.id);
+      const users = await firebaseAuthService.searchUsers(query.trim(), user?.id);
       setFoundUsers(users);
     } catch (error) {
       console.error('Error searching users:', error);
@@ -126,38 +125,13 @@ export default function HomeScreen() {
   };
 
   const handleStartChatWithUser = async (selectedUser: AuthUser) => {
-    try {
-      const chatName = `${user?.displayName} & ${selectedUser.displayName}`;
-      const newChat: Chat = {
-        id: generateId(),
-        name: chatName,
-        lastMessage: '',
-        lastMessageTime: Date.now(),
-      };
-      
-      const success = await databaseService.createChat(newChat);
-      if (success) {
-        await loadChats();
-        setShowFindUsersModal(false);
-        setSearchQuery('');
-        setFoundUsers([]);
-        router.push({
-          pathname: '/chat/[id]' as any,
-          params: { id: newChat.id, name: newChat.name },
-        });
-      } else {
-        Alert.alert('Error', 'Failed to create chat');
-      }
-    } catch (error) {
-      console.error('Error creating chat with user:', error);
-      Alert.alert('Error', 'Failed to start chat');
-    }
+    await handleCreateChat(selectedUser);
   };
 
   const handleChatPress = (chat: Chat) => {
     router.push({
       pathname: '/chat/[id]' as any,
-      params: { id: chat.id, name: chat.name },
+      params: { id: chat.id!, name: chat.name },
     });
   };
 
@@ -171,11 +145,12 @@ export default function HomeScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const success = await databaseService.deleteChat(chat.id);
-            if (success) {
-              await loadChats();
-            } else {
-              Alert.alert('Error', 'Failed to delete chat');
+            if (chat.id) {
+              const success = await firestoreService.deleteChat(chat.id);
+              if (!success) {
+                Alert.alert('Error', 'Failed to delete chat');
+              }
+              
             }
           },
         },
@@ -200,7 +175,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container]}>
       <View style={styles.header}>
         <ThemedText type="title" style={styles.headerTitle} lightColor="#1C1C1E">Messages</ThemedText>
         <TouchableOpacity
@@ -217,7 +192,7 @@ export default function HomeScreen() {
         onChatLongPress={handleChatLongPress}
       />
 
-      {/* Find Users Modal */}
+      
       <Modal
         visible={showFindUsersModal}
         transparent={true}

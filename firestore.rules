@@ -1,0 +1,55 @@
+// Firestore Security Rules for ConnectNow (Free Tier Optimized)
+// Upload these rules to your Firebase Console > Firestore Database > Rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection
+    match /users/{userId} {
+      // Users can read their own data and search for other users
+      allow read: if request.auth != null;
+      
+      // Users can only create and update their own profile
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      
+      // No deletion of user profiles
+      allow delete: if false;
+    }
+    
+    // Chats collection
+    match /chats/{chatId} {
+      // Users can read chats they are participants in
+      allow read: if request.auth != null && 
+        request.auth.uid in resource.data.participants;
+      
+      // Users can create new chats
+      allow create: if request.auth != null && 
+        request.auth.uid in request.resource.data.participants &&
+        request.resource.data.participants.size() <= 2; // Limit to 2 participants for free tier
+      
+      // Users can update chats they are participants in (for last message updates)
+      allow update: if request.auth != null && 
+        request.auth.uid in resource.data.participants;
+      
+      // Users can delete chats they created
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.createdBy;
+    }
+    
+    // Messages collection
+    match /messages/{messageId} {
+      // Users can read messages from chats they are participants in
+      allow read: if request.auth != null && 
+        request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants;
+      
+      // Users can create messages in chats they are participants in
+      allow create: if request.auth != null && 
+        request.auth.uid in get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.participants &&
+        request.auth.uid == request.resource.data.senderId;
+      
+      // No updates or deletes for messages (immutable)
+      allow update, delete: if false;
+    }
+  }
+}

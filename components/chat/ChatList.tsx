@@ -6,7 +6,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { Chat } from '../../services/database';
+import { Chat } from '../../services/firestore';
 import { formatTime, truncateText } from '../../utils/helpers';
 
 interface ChatListProps {
@@ -81,7 +81,7 @@ export const ChatList: React.FC<ChatListProps> = ({
   return (
     <FlatList
       data={chats}
-      keyExtractor={(item) => item.id}
+      keyExtractor={(item) => item.id || 'unknown'}
       renderItem={renderChatItem}
       style={styles.container}
       showsVerticalScrollIndicator={false}

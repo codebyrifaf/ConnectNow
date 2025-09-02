@@ -1,11 +1,21 @@
+import { Timestamp } from 'firebase/firestore';
 import 'react-native-get-random-values';
 
 export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
-export function formatTime(timestamp: number): string {
-  const date = new Date(timestamp);
+export function formatTime(timestamp: number | Date | Timestamp): string {
+  let date: Date;
+  
+  if (timestamp instanceof Timestamp) {
+    date = timestamp.toDate();
+  } else if (timestamp instanceof Date) {
+    date = timestamp;
+  } else {
+    date = new Date(timestamp);
+  }
+  
   const now = new Date();
   
   // If today, show time

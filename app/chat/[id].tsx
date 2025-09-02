@@ -12,26 +12,37 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { ImageViewer } from '@/components/chat/ImageViewer';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { useAuth } from '@/contexts/AuthContext';
-import { databaseService, Message } from '@/services/database';
+import { firestoreService, Message } from '@/services/firestore';
 
 export default function ChatScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
-  const [imageViewerVisible, setImageViewerVisible] = useState(false);
-  const [selectedImageUri, setSelectedImageUri] = useState<string>('');
   const flatListRef = useRef<FlatList>(null);
   const router = useRouter();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    initializeChat();
-  }, [id]);
+    if (!id || !user) {
+      Alert.alert('Error', 'Chat not found');
+      router.back();
+      return;
+    }
+
+    // Subscribe to real-time messages
+    const unsubscribe = firestoreService.getChatMessages(id, (messages) => {
+      setMessages(messages);
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [id, user]);
 
   useEffect(() => {
     // Auto-scroll to bottom when new messages are added
@@ -42,93 +53,32 @@ export default function ChatScreen() {
     }
   }, [messages]);
 
-  const initializeChat = async () => {
-    try {
-      if (!user) {
-        Alert.alert('Error', 'User not found');
-        router.back();
-        return;
-      }
-
-      await loadMessages();
-    } catch (error) {
-      console.error('Error initializing chat:', error);
-      Alert.alert('Error', 'Failed to load chat');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadMessages = async () => {
-    try {
-      if (!id) return;
-      
-      const chatMessages = await databaseService.getMessages(id);
-      setMessages(chatMessages);
-    } catch (error) {
-      console.error('Error loading messages:', error);
-    }
-  };
-
   const handleSendMessage = async (text: string) => {
     if (!user || !id) return;
 
-    const newMessage: Omit<Message, 'id'> = {
+    const newMessage = {
       text,
       sender: user.displayName,
-      timestamp: Date.now(),
+      senderId: user.id,
       chatId: id,
-      messageType: 'text',
     };
 
     try {
-      const success = await databaseService.addMessage(newMessage);
-      if (success) {
-        await loadMessages();
-      } else {
+      const success = await firestoreService.addMessage(newMessage);
+      if (!success) {
         Alert.alert('Error', 'Failed to send message');
       }
+      // No need to reload - real-time listener will update
     } catch (error) {
       console.error('Error sending message:', error);
       Alert.alert('Error', 'Failed to send message');
     }
   };
 
-  const handleSendImage = async (imageUri: string) => {
-    if (!user || !id) return;
-
-    const newMessage: Omit<Message, 'id'> = {
-      text: '', // Empty text for image-only messages
-      sender: user.displayName,
-      timestamp: Date.now(),
-      chatId: id,
-      imageUri,
-      messageType: 'image',
-    };
-
-    try {
-      const success = await databaseService.addMessage(newMessage);
-      if (success) {
-        await loadMessages();
-      } else {
-        Alert.alert('Error', 'Failed to send image');
-      }
-    } catch (error) {
-      console.error('Error sending image:', error);
-      Alert.alert('Error', 'Failed to send image');
-    }
-  };
-
-  const handleImagePress = (imageUri: string) => {
-    setSelectedImageUri(imageUri);
-    setImageViewerVisible(true);
-  };
-
   const renderMessage = ({ item }: { item: Message }) => (
     <MessageBubble
       message={item}
-      isCurrentUser={item.sender === user?.displayName}
-      onImagePress={handleImagePress}
+      isCurrentUser={item.senderId === user?.id}
     />
   );
 
@@ -168,7 +118,7 @@ export default function ChatScreen() {
           <FlatList
             ref={flatListRef}
             data={messages}
-            keyExtractor={(item) => item.id?.toString() || ''}
+            keyExtractor={(item) => item.id || 'unknown'}
             renderItem={renderMessage}
             style={styles.messagesList}
             contentContainerStyle={[
@@ -197,17 +147,10 @@ export default function ChatScreen() {
           }}>
             <MessageInput 
               onSendMessage={handleSendMessage} 
-              onSendImage={handleSendImage}
             />
           </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
-      
-      <ImageViewer
-        visible={imageViewerVisible}
-        imageUri={selectedImageUri}
-        onClose={() => setImageViewerVisible(false)}
-      />
     </>
   );
 }
