@@ -82,7 +82,7 @@ export default function SignInScreen() {
           <View style={styles.form}>
             <View style={styles.inputContainer}>
               <ThemedText style={[styles.label, { color: textColor }]}>
-                Username or Email
+                Email
               </ThemedText>
               <View style={[styles.inputWrapper, { borderColor }]}>
                 <Ionicons name="person" size={20} color={placeholderColor} style={styles.inputIcon} />

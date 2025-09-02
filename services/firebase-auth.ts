@@ -25,7 +25,6 @@ class FirebaseAuthService {
     displayName: string
   ): Promise<{ success: boolean; message: string; user?: AuthUser }> {
     try {
-      // Validation
       if (!username || !email || !password || !displayName) {
         return { success: false, message: 'All fields are required' };
       }
@@ -51,7 +50,7 @@ class FirebaseAuthService {
       }
 
       // Create user with Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth,email,password)
       const firebaseUser = userCredential.user;
 
       // Update Firebase Auth profile
@@ -225,7 +224,6 @@ class FirebaseAuthService {
       }
 
       // Update Firestore user document
-      // Note: For simplicity, we'll skip email updates as they require re-authentication
       if (updates.displayName) {
         const userData = await firestoreService.getUser(userId);
         if (userData) {
