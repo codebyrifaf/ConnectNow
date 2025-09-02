@@ -44,7 +44,7 @@ A comprehensive social messaging application built with React Native, Expo, and 
 - **React Native** - Cross-platform mobile framework
 - **Expo** - Development platform and SDK
 - **TypeScript** - Type safety and better development experience
-- **SQLite** - Local database for data persistence
+- **Firebase** - Database for data persistence
 - **Expo Router** - File-based navigation system
 - **AsyncStorage** - Secure local storage for user sessions
 - **Expo Image Picker** - Camera and gallery access for photo sharing
@@ -277,7 +277,7 @@ Potential features to add:
 
 This project was developed as part of SWE 4637 - Web and Mobile Application Development course. It demonstrates:
 - Modern React Native development practices
-- SQLite database integration
+- Firebase database integration
 - Authentication implementation
 - Image handling in mobile apps
 - Professional UI/UX design principles
