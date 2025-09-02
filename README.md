@@ -1,6 +1,6 @@
 # Social Chat App - React Native Expo
 
-A comprehensive social messaging application built with React Native, Expo, and SQLite. Features user authentication, user discovery, real-time chat functionality, and photo sharing capabilities.
+A comprehensive social messaging application built with React Native, Expo, and Firebase. Features user authentication, user discovery, real-time chat functionality.
 
 ## Features
 
